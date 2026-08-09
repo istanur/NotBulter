@@ -1,0 +1,9 @@
+{
+  "appId": "com.example.shouzula",
+  "appName": "收租啦",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

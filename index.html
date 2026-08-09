@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#0E3A5C">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>收租啦</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <style>
+    :root {
+      --bg: #FAF6EF;
+      --ink: #0E3A5C;
+      --accent: #FF8A3D;
+      --green: #1E9E5A;
+      --amber: #C8881A;
+      --red: #D64545;
+      --muted: #5A6B78;
+      --card-bg: rgba(255, 255, 255, 0.5);
+      --card-stroke: rgba(255, 255, 255, 0.3);
+      --card-shadow: 0 6px 16px rgba(14, 58, 92, 0.10);
+      --card-inner: inset 0 1px 2px rgba(255, 255, 255, 0.25);
+      --radius-card: 22px;
+      --radius-btn: 14px;
+      --safe-top: env(safe-area-inset-top);
+      --safe-bottom: env(safe-area-inset-bottom);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Sarasa Gothic SC', 'PingFang SC', 'Microsoft YaHei', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #EAE5DC;
+      color: var(--ink);
+      display: flex;
+      justify-content: center;
+      overscroll-behavior-y: none;
+    }
+    #phone {
+      position: relative;
+      width: 100%;
+      max-width: 430px;
+      height: 100%;
+      max-height: 932px;
+      background: var(--bg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      padding-top: var(--safe-top);   /* 真机状态栏（时间/电量）沉浸式覆盖在应用顶部 */
+    }
+    @media (min-width: 460px) {
+      #phone {
+        border-radius: 32px;
+        box-shadow: 0 24px 70px rgba(14, 58, 92, 0.18);
+        margin: 20px auto;
+        height: calc(100vh - 40px);
+      }
+    }
+
+    #screens {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+    .screen {
+      display: none;
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 0 20px 24px;
+      animation: fadeIn .18s ease;
+    }
+    .screen.active { display: block; }
+    .screen.tab-screen { padding-bottom: calc(90px + var(--safe-bottom)); }
+    .screen.sec-screen { padding-bottom: calc(24px + var(--safe-bottom)); }
+    @keyframes fadeIn { from { opacity: .85; transform: translateY(6px);} to { opacity: 1; transform: translateY(0);} }
+
+    #tabbar {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: calc(64px + var(--safe-bottom));
+      padding: 8px 0 var(--safe-bottom);
+      display: flex;
+      justify-content: space-around;
+      align-items: flex-start;
+      background: rgba(250, 246, 239, 0.72);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      border-top: 1px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 -4px 20px rgba(14, 58, 92, 0.06);
+      z-index: 50;
+      transition: transform .22s ease;
+    }
+    #tabbar.hidden { transform: translateY(110%); }
+    .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; transition: transform .12s ease; }
+    .tab:active { transform: scale(0.92); }
+    .tab svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .tab.active { color: var(--accent); }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-stroke);
+      border-radius: var(--radius-card);
+      box-shadow: var(--card-shadow), var(--card-inner);
+      backdrop-filter: blur(18px) saturate(160%);
+      -webkit-backdrop-filter: blur(18px) saturate(160%);
+    }
+    .topnav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 56px;
+      padding: 0 16px;
+      margin: 0 -20px;
+      background: rgba(250, 246, 239, 0.86);
+      backdrop-filter: blur(16px) saturate(160%);
+      -webkit-backdrop-filter: blur(16px) saturate(160%);
+    }
+    .topnav .back { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+    .topnav .title { flex: 1; text-align: center; font-size: 18px; font-weight: 700; }
+    .topnav .action { font-size: 14px; font-weight: 700; color: var(--accent); cursor: pointer; min-width: 24px; text-align: right; }
+
+    .btn-primary {
+      width: 100%;
+      height: 50px;
+      border: none;
+      border-radius: var(--radius-btn);
+      background: var(--accent);
+      color: #fff;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 16px rgba(255, 138, 61, 0.28);
+    }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-outline {
+      width: 100%;
+      height: 50px;
+      border: 1px solid var(--card-stroke);
+      border-radius: var(--radius-btn);
+      background: var(--card-bg);
+      color: var(--ink);
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .field {
+      width: 100%;
+      background: var(--card-bg);
+      border: 1px solid var(--card-stroke);
+      border-radius: var(--radius-btn);
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--ink);
+      outline: none;
+      font-family: inherit;
+    }
+    .field::placeholder { color: var(--muted); }
+    .form-row { display: flex; flex-direction: column; gap: 8px; }
+    .form-row label { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .detail-card .room-input {
+      width: 116px;
+      padding: 8px 12px;
+      text-align: right;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .detail-card .room-input.flex { width: auto; flex: 1; min-width: 0; text-align: left; font-weight: 600; }
+    .detail-card .card-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .5px;
+      color: var(--accent);
+      padding-bottom: 6px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid rgba(255, 138, 61, 0.18);
+    }
+    .detail-card .card-head .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }
+    .landlord-card .edit-icon { margin-left: auto; color: var(--muted); display: flex; }
+
+    .chip {
+      height: 32px;
+      padding: 0 14px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--card-bg);
+      color: var(--muted);
+      border: 1px solid var(--card-stroke);
+    }
+    .chip.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+    .status { font-size: 12px; font-weight: 700; }
+    .status.paid { color: var(--green); }
+    .status.due { color: var(--amber); }
+    .status.overdue { color: var(--red); }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(90px + var(--safe-bottom));
+      transform: translateX(-50%) translateY(20px);
+      opacity: 0;
+      background: rgba(14, 58, 92, 0.92);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 14px;
+      pointer-events: none;
+      transition: all .22s ease;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ===== Home ===== */
+    .home-header { padding: 8px 0 16px; text-align: center; }
+    .month-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--ink);
+      cursor: default;
+    }
+    .month-switch span { cursor: pointer; color: var(--accent); font-size: 20px; }
+    .period-switch { display: flex; align-items: center; justify-content: center; gap: 16px; }
+    .period-main { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 92px; }
+    .period-year { font-size: 14px; color: var(--muted); font-weight: 600; letter-spacing: 1px; }
+    .period-month { font-size: 22px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 10px; }
+    .nav-arrow { cursor: pointer; color: var(--accent); font-size: 26px; line-height: 1; user-select: none; transition: transform .15s ease; }
+    .nav-arrow:active { transform: scale(0.85); }
+    .nav-arrow.sm { font-size: 17px; opacity: 0.85; }
+    .summary-card { padding: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
+    .summary-card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .summary-card .value { font-size: 20px; font-weight: 700; }
+    .summary-card .value.paid { color: var(--green); }
+    .summary-card .value.due { color: var(--amber); }
+    .section-title { font-size: 16px; font-weight: 700; margin: 24px 0 12px; color: var(--ink); }
+    .room-card {
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+    }
+    .room-card:active { transform: scale(0.995); }
+    .room-card .left { display: flex; align-items: center; gap: 14px; }
+    .room-card .room-no { width: 44px; height: 44px; border-radius: 14px; background: rgba(255, 138, 61, 0.14); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; }
+    .room-card .info { display: flex; flex-direction: column; gap: 3px; }
+    .room-card .tenant { font-size: 15px; font-weight: 700; color: var(--ink); }
+    .room-card .rent { font-size: 13px; color: var(--muted); }
+    .room-card .right { text-align: right; }
+    .room-card .amount { font-size: 16px; font-weight: 700; }
+    .room-card .badge {
+      display: inline-block;
+      min-width: 48px;
+      height: 22px;
+      line-height: 22px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .badge.paid { color: var(--green); background: rgba(30, 158, 90, 0.12); }
+    .badge.due { color: var(--amber); background: rgba(200, 136, 26, 0.12); }
+    .badge.overdue { color: var(--red); background: rgba(214, 69, 69, 0.12); }
+    .room-card .amount.muted { color: var(--muted); font-weight: 600; font-size: 14px; }
+    .empty-hint { padding: 12px 16px; margin: 12px 0; font-size: 13px; color: var(--muted); background: rgba(14, 58, 92, 0.04); border-radius: 14px; text-align: center; }
+    .bill-total .hint { margin-top: 8px; font-size: 12px; color: var(--muted); font-weight: 500; line-height: 1.5; }
+    .amount.muted { color: var(--muted); font-weight: 600; }
+
+    /* ===== Detail / Form ===== */
+    .detail-card { padding: 20px; margin-bottom: 14px; }
+    .detail-card .row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(14, 58, 92, 0.06); }
+    .detail-card .row:last-child { border-bottom: none; }
+    .detail-card .k { font-size: 14px; color: var(--muted); }
+    .detail-card .v { font-size: 15px; font-weight: 700; color: var(--ink); }
+    .detail-card .v.edit { color: var(--accent); display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+    /* ===== Bill ===== */
+    .bill-total {
+      padding: 22px 20px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .bill-total .label { font-size: 13px; color: var(--muted); }
+    .bill-total .value { font-size: 34px; font-weight: 700; color: var(--ink); margin-top: 4px; }
+    .bill-total .bill-breakdown { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(14, 58, 92, 0.16); display: flex; flex-direction: column; gap: 7px; text-align: left; }
+    .bill-total .bb-row { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--muted); }
+    .bill-total .bb-row span:last-child { color: var(--ink); font-weight: 700; font-size: 14px; }
+    .bill-total .bb-row.total { border-top: 1px solid rgba(14, 58, 92, 0.08); margin-top: 2px; padding-top: 8px; }
+    .bill-total .bb-row.total span { color: var(--ink); font-weight: 700; font-size: 15px; }
+    .bill-paid-flag { display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--green); }
+    .bill-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(14, 58, 92, 0.06); }
+    .bill-row:last-child { border-bottom: none; }
+    .bill-row .name { font-size: 15px; font-weight: 600; color: var(--ink); }
+    .bill-row .desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .bill-row .price { font-size: 16px; font-weight: 700; color: var(--ink); }
+    .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+
+    /* ===== Stats ===== */
+    .stats-hero { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .stats-hero .head { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
+    .stats-hero .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
+    .stats-hero .grid .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .stats-hero .grid .value { font-size: 20px; font-weight: 700; }
+    .stats-hero .grid .value.paid { color: var(--green); }
+    .stats-hero .grid .value.due { color: var(--amber); }
+    .trend-chart {
+      height: 130px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 6px;
+      padding-top: 10px;
+    }
+    .bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .bar { width: 100%; max-width: 30px; border-radius: 6px 6px 0 0; min-height: 4px; }
+    .bar-label { font-size: 11px; color: var(--muted); }
+    .bar.current { background: var(--ink); }
+    .bar.normal { background: var(--accent); }
+    .stat-row-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(14, 58, 92, 0.06); }
+    .stat-row-item:last-child { border-bottom: none; }
+    .stat-row-item .room { font-size: 15px; font-weight: 700; }
+    .stat-row-item .amount { font-size: 15px; font-weight: 700; }
+
+    /* ===== Tenant ===== */
+    .search-bar {
+      height: 48px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .search-bar input { flex: 1; background: transparent; border: none; outline: none; font-size: 14px; color: var(--ink); font-family: inherit; }
+    .search-bar input::placeholder { color: var(--muted); }
+    .tenant-card { padding: 16px; margin-bottom: 12px; }
+    .tenant-card .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .tenant-card .name { font-size: 15px; font-weight: 700; }
+    .tenant-card .phone { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+    .tenant-card .actions { display: flex; justify-content: space-between; }
+    .tenant-card .actions span { font-size: 14px; font-weight: 700; cursor: pointer; }
+    .tenant-card .actions .edit { color: var(--ink); }
+    .tenant-card .actions .checkout { color: var(--accent); }
+    .tenant-card .actions .del { color: var(--red); }
+
+    /* ===== Mine ===== */
+    .landlord-card { padding: 20px; display: flex; align-items: center; gap: 14px; margin: 8px 0 18px; }
+    .landlord-card .avatar { width: 56px; height: 56px; border-radius: 50%; background: rgba(255, 138, 61, 0.14); color: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; }
+    .landlord-card .name { font-size: 17px; font-weight: 700; }
+    .landlord-card .tel { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    .menu-list { padding: 8px; }
+    .menu-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 12px; cursor: pointer; border-bottom: 1px solid rgba(14, 58, 92, 0.06); }
+    .menu-item:last-child { border-bottom: none; }
+    .menu-item:active { background: rgba(14, 58, 92, 0.03); border-radius: 14px; }
+    .menu-item .left { display: flex; align-items: center; gap: 12px; }
+    .menu-item .icon { width: 24px; height: 24px; color: var(--accent); }
+    .menu-item .txt { font-size: 15px; font-weight: 600; color: var(--ink); }
+    .menu-item .arrow { width: 18px; height: 18px; color: var(--muted); }
+
+    .empty-tip { text-align: center; color: var(--muted); font-size: 14px; padding: 40px 0; }
+
+    /* ===== In-app confirm modal ===== */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(14, 58, 92, 0.42);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200; opacity: 0; pointer-events: none; transition: opacity .18s ease;
+    }
+    .modal-overlay.show { opacity: 1; pointer-events: auto; }
+    .modal {
+      width: 84%; max-width: 320px; background: #fff; border-radius: 18px;
+      padding: 22px 20px 16px; box-shadow: 0 20px 50px rgba(14, 58, 92, 0.25);
+      transform: translateY(8px) scale(0.98); transition: all .18s ease;
+    }
+    .modal-overlay.show .modal { transform: translateY(0) scale(1); }
+    .modal .m-title { font-size: 17px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+    .modal .m-msg { font-size: 14px; color: var(--muted); line-height: 1.5; margin-bottom: 18px; }
+    .modal .m-actions { display: flex; gap: 12px; }
+    .modal .m-actions button { flex: 1; height: 44px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; }
+    .modal .m-cancel { background: rgba(14, 58, 92, 0.06); color: var(--ink); }
+    .modal .m-confirm { background: var(--accent); color: #fff; }
+    .modal .m-confirm.danger { background: var(--red); }
+  </style>
+</head>
+<body>
+  <div id="phone">
+    <div id="screens">
+      <!-- Home -->
+      <section id="screen-home" class="screen tab-screen active"></section>
+      <!-- History / Bills -->
+      <section id="screen-history" class="screen tab-screen"></section>
+      <!-- Mine -->
+      <section id="screen-mine" class="screen tab-screen"></section>
+      <!-- Secondary screens -->
+      <section id="screen-room-detail" class="screen sec-screen"></section>
+      <section id="screen-month-bill" class="screen sec-screen"></section>
+      <section id="screen-month-list" class="screen sec-screen"></section>
+      <section id="screen-add-room" class="screen sec-screen"></section>
+      <section id="screen-bill-stats" class="screen sec-screen"></section>
+      <section id="screen-billing-set" class="screen sec-screen"></section>
+      <section id="screen-landlord-edit" class="screen sec-screen"></section>
+    </div>
+
+    <nav id="tabbar">
+      <div class="tab active" data-tab="home" onclick="switchTab('home')">
+        <svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"/><path d="M5 10v9h14v-9"/></svg>
+        <span>首页</span>
+      </div>
+      <div class="tab" data-tab="history" onclick="switchTab('history')">
+        <svg viewBox="0 0 24 24"><rect x="4" y="13" width="4" height="7" rx="1.5"/><rect x="10" y="8" width="4" height="12" rx="1.5"/><rect x="16" y="4" width="4" height="16" rx="1.5"/></svg>
+        <span>账单</span>
+      </div>
+      <div class="tab" data-tab="mine" onclick="switchTab('mine')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
+        <span>我的</span>
+      </div>
+    </nav>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <div id="modal" class="modal-overlay">
+    <div class="modal">
+      <div class="m-title" id="modal-title"></div>
+      <div class="m-msg" id="modal-msg"></div>
+      <div class="m-actions">
+        <button class="m-cancel" id="modal-cancel">取消</button>
+        <button class="m-confirm" id="modal-confirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ===== Data ===== */
+    // 仅保留一条默认真实数据：房间于"启用月"投入使用，当月账单在录入水/电表读数后才生成
+    const NOW = new Date();
+    const YEAR = NOW.getFullYear();
+    const CUR_MONTH = NOW.getMonth() + 1;
+    const RETENTION_YEARS = 5;          // 数据保留 5 年，超过的账单自动清除
+    const LAUNCH_YEAR = 2026, LAUNCH_MONTH = 8;   // 应用正式启用月份：2026 年 8 月
+    const LAUNCH_KEY = LAUNCH_YEAR + '-' + LAUNCH_MONTH;
+    let rooms = [
+      { no: '101', tenant: '张伟', phone: '138****8021', rent: 2800, waterBase: 1250, water: 1250, electricBase: 3680, electric: 3680, status: 'due', bills: {} }
+    ];
+    const globalPrice = { water: 4.5, electric: 0.8 };
+    let landlord = { name: '陈房东', phone: '156****9988' };
+    // 月份导航窗口：从启用月（2026-08）到「当前真实月」；未来月份尚不存在，不生成
+    function buildMonthMeta() {
+      const m = {};
+      for (let y = LAUNCH_YEAR; y <= YEAR; y++) {
+        const maxM = (y === YEAR) ? CUR_MONTH : 12;   // 只生成到当前月，9 月及以后等未来月份不出现
+        for (let i = 1; i <= maxM; i++) {
+          if (y === LAUNCH_YEAR && i < LAUNCH_MONTH) continue;   // 启用前的月份不存在，不生成
+          const k = y + '-' + i;
+          m[k] = { label: y + '年' + i + '月', live: true };
+        }
+      }
+      return m;
+    }
+    let monthMeta = buildMonthMeta();
+    let currentRoomNo = '101';
+    let detailEdit = false;
+    let historyYear = YEAR;     // 账单页当前查看年份
+    let statsYear = YEAR;       // 账单统计 / 导出页当前年份
+    let currentMonthKey = monthMeta[LAUNCH_KEY] ? LAUNCH_KEY : Object.keys(monthMeta)[0];
+    function yearList() {
+      return [...new Set(Object.keys(monthMeta).map(k => parseInt(k.split('-')[0], 10)))].sort((a, b) => a - b);
+    }
+
+    /* ===== Persistence: data is saved INSIDE the installed app =====
+       在手机上（Capacitor 原生）：通过 @capacitor/filesystem 写入 App 私有沙盒目录（Directory.DATA），
+       不是浏览器存储、重启不丢、数据不出本机。
+       在网页预览时（无原生桥）：只在内存中保留，绝不写 localStorage，不给浏览器增加负担。
+       超过 RETENTION_YEARS 的旧账单在存档/读取时自动清除。 ===== */
+    const STORAGE_KEY = 'shouzula_state_v1';   // 早期版本的浏览器存储键，加载时主动清理
+    const DATA_FILE = 'shouzula-state.json';
+    function getFs() {
+      if (typeof Capacitor === 'undefined') return null;
+      const P = Capacitor.Plugins || {};
+      return P.Filesystem || window.Filesystem || null;
+    }
+    function isNativeApp() {
+      return (typeof Capacitor !== 'undefined') && Capacitor.isNativePlatform && Capacitor.isNativePlatform();
+    }
+    function purgeOldBills() {
+      const minYear = Math.max(LAUNCH_YEAR, YEAR - RETENTION_YEARS);   // 保留启用月起、近 5 年
+      rooms.forEach(r => {
+        if (!r.bills) return;
+        Object.keys(r.bills).forEach(k => {
+          const y = parseInt(String(k).split('-')[0], 10);
+          // 删除：启用前 / 超 5 年 / 不在有效月份窗口内（含 9 月及以后的未来幻影账单）
+          if (k < LAUNCH_KEY || y < minYear || !monthMeta[k]) delete r.bills[k];
+        });
+      });
+      Object.keys(monthMeta).forEach(k => {
+        if (k < LAUNCH_KEY) { delete monthMeta[k]; return; }
+        const y = parseInt(String(k).split('-')[0], 10);
+        if (y < minYear) delete monthMeta[k];
+      });
+    }
+    function applyState(s) {
+      if (!s || typeof s !== 'object') return;
+      if (Array.isArray(s.rooms)) rooms = s.rooms.map(r => { r.bills = r.bills || {}; return r; });
+      if (s.landlord) landlord = s.landlord;
+      if (s.globalPrice) { globalPrice.water = s.globalPrice.water; globalPrice.electric = s.globalPrice.electric; }
+      if (s.currentMonthKey && monthMeta[s.currentMonthKey]) currentMonthKey = s.currentMonthKey;
+      purgeOldBills();
+    }
+    async function saveState() {
+      purgeOldBills();
+      const payload = JSON.stringify({ rooms, landlord, globalPrice, currentMonthKey });
+      const fs = getFs();
+      // 主路径：写入 App 私有沙盒（Directory.DATA）。必须指定 encoding:'utf8'，
+      // 否则 Capacitor 默认按 base64 返回，读的时候 JSON.parse 会直接崩。
+      if (fs) {
+        try { await fs.writeFile({ path: DATA_FILE, data: payload, directory: 'DATA', encoding: 'utf8' }); }
+        catch (e) { console.error('[shouzula] 存档写入(filesystem)失败:', e); }
+      }
+      // 安全网：原生环境下若文件系统不可用，降级写入 localStorage（同样位于 App 沙盒，重启不丢）
+      if (isNativeApp()) {
+        try { localStorage.setItem(STORAGE_KEY, payload); } catch (e) {}
+      }
+      // 网页预览（非原生）：刻意不写任何存储，保持内存中的默认数据
+    }
+    async function loadState() {
+      const fs = getFs();
+      if (fs) {
+        try {
+          const res = await fs.readFile({ path: DATA_FILE, directory: 'DATA', encoding: 'utf8' });
+          applyState(JSON.parse(res.data));
+          return;
+        } catch (e) {
+          // 文件不存在属正常首启；其他错误打印并继续走兜底
+          if (!(e && /not exist|ENOENT|does not exist/i.test(String((e && e.message) || e)))) {
+            console.error('[shouzula] 存档读取(filesystem)失败，尝试 localStorage 兜底:', e);
+          }
+        }
+      }
+      // 兜底：原生环境下读取 localStorage（与上面的安全网对应）
+      if (isNativeApp()) {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) applyState(JSON.parse(raw));
+        } catch (e) { console.error('[shouzula] 存档读取(localStorage)失败:', e); }
+      }
+      // 网页预览（非原生）：保持内存中的默认数据
+    }
+
+    /* ===== Per-month bill archiving & retrieval ===== */
+    function archiveMonth(key) {
+      rooms.forEach(r => {
+        r.bills = r.bills || {};
+        if (isBillGenerated(r)) {
+          const b = roomBill(r);
+          r.bills[key] = {
+            rent: r.rent, wU: b.wU, waterFee: b.waterFee, eU: b.eU, elecFee: b.elecFee, total: b.total, status: r.status,
+            waterBase: r.waterBase, water: r.water, electricBase: r.electricBase, electric: r.electric,
+            wP: roomPrice(r, 'water'), eP: roomPrice(r, 'electric')
+          };
+        } else {
+          delete r.bills[key];
+        }
+      });
+      saveState();
+    }
+    function loadMonth(key) {
+      rooms.forEach(r => {
+        const a = r.bills && r.bills[key];
+        if (a) {
+          r.waterBase = a.waterBase; r.water = a.water; r.electricBase = a.electricBase; r.electric = a.electric;
+          r.rent = a.rent; r.status = a.status;
+          r.price = r.price || {}; r.price.water = a.wP; r.price.electric = a.eP;
+        } else {
+          r.water = r.waterBase; r.electric = r.electricBase;
+        }
+      });
+    }
+    function billForMonth(r, key) {
+      const a = r.bills && r.bills[key];
+      if (a) return a;
+      if (key === currentMonthKey) {
+        if (!isBillGenerated(r)) return null;
+        return roomBill(r);
+      }
+      return null;
+    }
+
+    /* ===== SVG helpers ===== */
+    const icon = {
+      chart: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect x="4" y="13" width="4" height="7" rx="1.5" fill="currentColor"/><rect x="10" y="8" width="4" height="12" rx="1.5" fill="currentColor"/><rect x="16" y="4" width="4" height="16" rx="1.5" fill="currentColor"/></svg>`,
+      people: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="currentColor" stroke-width="1.8"/></svg>`,
+      setting: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 00-2-1.2L16.2 3h-4l-.4 2.7a7 7 0 00-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 002 1.2l.4 2.7h4l.4-2.7a7 7 0 002-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z" stroke="currentColor" stroke-width="1.6"/></svg>`,
+      chevron: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>`,
+      edit: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L18 10l-4-4L4 16v4z" stroke-linejoin="round"/><path d="M14 6l4 4"/></svg>`,
+      search: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4" stroke-linecap="round"/></svg>`,
+      back: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5L8 12l7 7"/></svg>`
+    };
+
+    /* ===== Router ===== */
+    let stack = [];
+    function switchTab(name) {
+      const tabMap = { home: 'screen-home', history: 'screen-history', mine: 'screen-mine' };
+      navigate(tabMap[name], { push: false, tab: name });
+    }
+    function navigate(screenId, opts = {}) {
+      opts = { push: true, tab: null, ...opts };
+      const current = document.querySelector('.screen.active');
+      const currentId = current ? current.id : null;
+      if (opts.push && currentId && currentId !== screenId) stack.push(currentId);
+      if (opts.tab !== null) stack = [];
+
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(screenId).classList.add('active');
+
+      const isTab = ['screen-home','screen-history','screen-mine'].includes(screenId);
+      document.getElementById('tabbar').classList.toggle('hidden', !isTab);
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      if (opts.tab) document.querySelector(`.tab[data-tab="${opts.tab}"]`).classList.add('active');
+
+      document.getElementById('screens').scrollTop = 0;
+      if (screenId === 'screen-home') renderHome();
+      if (screenId === 'screen-history') renderHistory();
+      if (screenId === 'screen-mine') renderMine();
+      if (screenId === 'screen-room-detail') { detailEdit = false; renderRoomDetail(currentRoomNo); }
+      if (screenId === 'screen-month-bill') renderMonthBill(currentRoomNo);
+      if (screenId === 'screen-month-list') renderMonthList();
+      if (screenId === 'screen-add-room') renderAddRoom();
+      if (screenId === 'screen-bill-stats') renderBillStats();
+      if (screenId === 'screen-billing-set') renderBillingSet();
+      if (screenId === 'screen-landlord-edit') renderLandlordEdit();
+    }
+    function back() {
+      if (stack.length) {
+        const prev = stack.pop();
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(prev).classList.add('active');
+        const isTab = ['screen-home','screen-history','screen-mine'].includes(prev);
+        document.getElementById('tabbar').classList.toggle('hidden', !isTab);
+        if (isTab) {
+          const map = { 'screen-home':'home', 'screen-history':'history', 'screen-mine':'mine' };
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelector(`.tab[data-tab="${map[prev]}"]`).classList.add('active');
+        }
+      } else {
+        switchTab('home');
+      }
+    }
+    // 安卓物理返回键：二级页面走应用内“返回上一级”，根页面才退出
+    (function setupHardwareBack() {
+      try {
+        const Cap = window.Capacitor;
+        if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.App) {
+          Cap.Plugins.App.addListener('backButton', () => {
+            if (stack.length > 0) back();
+            else Cap.Plugins.App.exitApp();
+          });
+        }
+      } catch (e) { /* 非原生环境忽略 */ }
+    })();
+
+    /* ===== Renderers ===== */
+    function fmt(n) { return '¥' + n.toLocaleString('zh-CN'); }
+    function statusLabel(s) { return { paid: '已缴', due: '待缴', overdue: '逾期' }[s] || s; }
+    function statusColor(s) { return { paid: 'var(--green)', due: 'var(--amber)', overdue: 'var(--red)' }[s]; }
+    function roomPrice(r, type) { return (r.price && r.price[type] != null) ? r.price[type] : globalPrice[type]; }
+    function getMonthRooms(key) { return rooms; }
+    function getRoomAt(key, no) { const arr = getMonthRooms(key); return arr.find(x => x.no === no) || arr[0]; }
+    function roomBill(r) {
+      const wP = roomPrice(r, 'water'), eP = roomPrice(r, 'electric');
+      const wU = Math.max(0, (r.water || 0) - (r.waterBase || 0));
+      const eU = Math.max(0, (r.electric || 0) - (r.electricBase || 0));
+      const waterFee = Math.round(wU * wP);
+      const elecFee = Math.round(eU * eP);
+      return { rent: r.rent, wU, waterFee, eU, elecFee, total: r.rent + waterFee + elecFee };
+    }
+    // 当月账单是否已生成：仅当录入了超过表底的读数（即当月用量已记录）才算“数据完成”
+    function isBillGenerated(r) {
+      return (r.water != null) && (r.electric != null) &&
+             (r.water > (r.waterBase || 0) || r.electric > (r.electricBase || 0));
+    }
+    function updateRoomField(no, field, val) {
+      const r = rooms.find(x => x.no === no); if (!r) return;
+      if (field === 'name') { r.tenant = val; }
+      else if (field === 'phone') { r.phone = val; }
+      else {
+        const v = parseFloat(val); if (isNaN(v)) return;
+        if (field === 'rent') r.rent = v;
+        else if (field === 'wprice') { r.price = r.price || {}; r.price.water = v; }
+        else if (field === 'eprice') { r.price = r.price || {}; r.price.electric = v; }
+        else if (field === 'waterBase') r.waterBase = v;
+        else if (field === 'electricBase') r.electricBase = v;
+        else if (field === 'water') r.water = v;
+        else if (field === 'electric') r.electric = v;
+      }
+      const b = roomBill(r);
+      const el = document.getElementById('detail-total');
+      if (el) el.textContent = isBillGenerated(r) ? fmt(b.total) : '待生成';
+      const hintEl = document.getElementById('detail-hint');
+      if (hintEl) hintEl.style.display = isBillGenerated(r) ? 'none' : '';
+      archiveMonth(currentMonthKey);
+      renderHome();
+    }
+
+    function renderHome() {
+      if (!monthMeta[currentMonthKey]) { currentMonthKey = monthMeta[LAUNCH_KEY] ? LAUNCH_KEY : Object.keys(monthMeta)[0]; }
+      const meta = monthMeta[currentMonthKey];
+      const [cy, cm] = currentMonthKey.split('-').map(Number);
+      const list = getMonthRooms(currentMonthKey).map(r => {
+        const b = billForMonth(r, currentMonthKey);
+        const gen = !!b;
+        const badge = gen
+          ? `<div class="badge ${r.status}">${statusLabel(r.status)}</div>`
+          : `<div class="badge due">待生成</div>`;
+        const amount = gen
+          ? `<div class="amount" style="color:${statusColor(r.status)}">${fmt(b.total)}</div>`
+          : `<div class="amount muted">待生成</div>`;
+        return `
+          <div class="card room-card" onclick="currentRoomNo='${r.no}';currentMonthKey='${currentMonthKey}';navigate('screen-room-detail')">
+            <div class="left">
+              <div class="room-no">${r.no}</div>
+              <div class="info">
+                <div class="tenant">${r.tenant}</div>
+                <div class="rent">月租 ${fmt(r.rent)}</div>
+              </div>
+            </div>
+            <div class="right">
+              ${badge}
+              ${amount}
+            </div>
+          </div>
+        `;
+      }).join('');
+      let recv = 0, paid = 0, genCount = 0;
+      getMonthRooms(currentMonthKey).forEach(r => {
+        const b = billForMonth(r, currentMonthKey);
+        if (!b) return;
+        genCount++;
+        recv += b.total; if (r.status === 'paid') paid += b.total;
+      });
+      const due = recv - paid;
+      const hint = genCount === 0
+        ? `<div class="empty-hint">本月账单待生成，录入水/电表“当前读数”后将自动生成</div>`
+        : '';
+      const keys = Object.keys(monthMeta);
+      const atFirst = currentMonthKey === keys[0];
+      const atLast = currentMonthKey === keys[keys.length - 1];
+      const dim = a => a ? '' : 'style="opacity:.3;pointer-events:none;"';
+      document.getElementById('screen-home').innerHTML = `
+        <div class="home-header">
+          <div class="period-switch">
+            <span class="nav-arrow" ${dim(!atFirst)} onclick="changeYear(-1)">‹</span>
+            <div class="period-main">
+              <div class="period-year">${cy} 年</div>
+              <div class="period-month"><span class="nav-arrow sm" ${dim(!atFirst)} onclick="changeMonth(-1)">‹</span>${cm}月<span class="nav-arrow sm" ${dim(!atLast)} onclick="changeMonth(1)">›</span></div>
+            </div>
+            <span class="nav-arrow" ${dim(!atLast)} onclick="changeYear(1)">›</span>
+          </div>
+        </div>
+        <div class="card summary-card">
+          <div><div class="label">本月应收</div><div class="value">${fmt(recv)}</div></div>
+          <div><div class="label">已收</div><div class="value paid">${fmt(paid)}</div></div>
+          <div><div class="label">待缴</div><div class="value due">${fmt(due)}</div></div>
+        </div>
+        ${hint}
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:24px 0 12px;">
+          <div class="section-title" style="margin:0;">房间账单</div>
+          <div style="font-size:14px; font-weight:700; color:var(--accent); cursor:pointer;" onclick="navigate('screen-add-room')">+ 新增房间</div>
+        </div>
+        ${list}
+      `;
+    }
+    function changeMonth(delta) {
+      const keys = Object.keys(monthMeta);
+      if (!monthMeta[currentMonthKey]) currentMonthKey = keys[0];
+      const idx = keys.indexOf(currentMonthKey) + delta;
+      if (idx < 0 || idx > keys.length - 1) { renderHome(); return; }   // 已到边界，不越界
+      archiveMonth(currentMonthKey);
+      currentMonthKey = keys[idx];
+      loadMonth(currentMonthKey);
+      saveState();
+      renderHome();
+    }
+    function changeYear(delta) {
+      const years = yearList();
+      const minY = years[0], maxY = years[years.length - 1];
+      const [y, m] = currentMonthKey.split('-').map(Number);
+      const ny = Math.max(minY, Math.min(maxY, y + delta));
+      if (ny === y) { renderHome(); return; }
+      let target = ny + '-' + m;
+      if (!monthMeta[target]) {
+        const monthsInYear = Object.keys(monthMeta).filter(k => k.startsWith(ny + '-')).sort();
+        if (!monthsInYear.length) { renderHome(); return; }
+        target = monthsInYear[delta > 0 ? monthsInYear.length - 1 : 0];
+      }
+      archiveMonth(currentMonthKey);
+      currentMonthKey = target;
+      loadMonth(currentMonthKey);
+      saveState();
+      renderHome();
+    }
+
+    function renderHistory() {
+      const years = yearList();
+      const minY = years[0], maxY = years[years.length - 1];
+      const atFirstY = historyYear <= minY, atLastY = historyYear >= maxY;
+      const dim = a => a ? '' : 'style="opacity:.3;pointer-events:none;"';
+      const monthKeys = Object.keys(monthMeta).filter(k => k.startsWith(historyYear + '-'))
+        .sort((a, b) => parseInt(a.split('-')[1], 10) - parseInt(b.split('-')[1], 10));
+      const list = monthKeys.map(k => {
+        const meta = monthMeta[k];
+        const arr = getMonthRooms(k);
+        let recv = 0, paid = 0;
+        arr.forEach(r => { const b = billForMonth(r, k); if (b) { recv += b.total; if (b.status === 'paid') paid += b.total; } });
+        const totalTxt = recv > 0 ? fmt(recv) : '—';
+        const paidTxt = paid > 0 ? ` · 已收 ${fmt(paid)}` : '';
+        return `
+          <div class="card room-card" onclick="currentMonthKey='${k}';navigate('screen-month-list')">
+            <div class="left"><div class="room-no" style="background:rgba(14,58,92,0.08);color:var(--ink)">${parseInt(k.split('-')[1], 10)}月</div><div class="info"><div class="tenant">${meta.label}账单</div><div class="rent">${arr.length} 个房间${paidTxt}</div></div></div>
+            <div class="right"><div class="amount ${recv > 0 ? '' : 'muted'}">${totalTxt}</div></div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('screen-history').innerHTML = `
+        <div style="padding:14px 0 8px; font-size:18px; font-weight:700; text-align:center;">账单</div>
+        <div class="period-switch" style="margin-bottom:14px;">
+          <span class="nav-arrow" ${dim(!atFirstY)} onclick="changeHistoryYear(-1)">‹</span>
+          <div class="period-year" style="font-size:20px; font-weight:700; color:var(--ink);">${historyYear} 年</div>
+          <span class="nav-arrow" ${dim(!atLastY)} onclick="changeHistoryYear(1)">›</span>
+        </div>
+        ${list}
+      `;
+    }
+    function changeHistoryYear(delta) {
+      const years = yearList();
+      const minY = years[0], maxY = years[years.length - 1];
+      historyYear = Math.max(minY, Math.min(maxY, historyYear + delta));
+      renderHistory();
+    }
+    function renderMonthList() {
+      const meta = monthMeta[currentMonthKey];
+      const arr = getMonthRooms(currentMonthKey);
+      let recv = 0, paid = 0;
+      arr.forEach(r => { const b = billForMonth(r, currentMonthKey); if (!b) return; recv += b.total; if (r.status === 'paid') paid += b.total; });
+      const due = recv - paid;
+      const list = arr.map(r => {
+        const b = billForMonth(r, currentMonthKey);
+        const gen = !!b;
+        const badge = gen ? `<div class="badge ${r.status}">${statusLabel(r.status)}</div>` : `<div class="badge due">待生成</div>`;
+        const amount = gen ? `<div class="amount" style="color:${statusColor(r.status)}">${fmt(b.total)}</div>` : `<div class="amount muted">待生成</div>`;
+        const rent = gen ? `房租 ${fmt(r.rent)} + 水电 ${fmt(b.waterFee + b.elecFee)}` : `房租 ${fmt(r.rent)} · 待生成账单`;
+        return `
+          <div class="card room-card" onclick="currentRoomNo='${r.no}';navigate('screen-month-bill')">
+            <div class="left">
+              <div class="room-no">${r.no}</div>
+              <div class="info">
+                <div class="tenant">${r.tenant}</div>
+                <div class="rent">${rent}</div>
+              </div>
+            </div>
+            <div class="right">
+              ${badge}
+              ${amount}
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('screen-month-list').innerHTML = `
+        <div class="topnav"><div class="back" onclick="back()">${icon.back}</div><div class="title">${meta.label}账单</div><div class="action"></div></div>
+        <div style="padding-top:14px;">
+          <div class="card summary-card" style="margin-bottom:14px;">
+            <div><div class="label">应收</div><div class="value">${fmt(recv)}</div></div>
+            <div><div class="label">已收</div><div class="value paid">${fmt(paid)}</div></div>
+            <div><div class="label">待缴</div><div class="value due">${fmt(due)}</div></div>
+          </div>
+          <div class="section-title">各房间账单</div>
+          ${list}
+        </div>
+      `;
+    }
+
+    function renderMine() {
+      document.getElementById('screen-mine').innerHTML = `
+        <div style="padding:14px 0 8px; font-size:18px; font-weight:700;">我的</div>
+        <div class="card landlord-card" onclick="navigate('screen-landlord-edit')" style="cursor:pointer;">
+          <div class="avatar">${landlord.name.charAt(0)}</div>
+          <div><div class="name">${landlord.name}</div><div class="tel">${landlord.phone}</div></div>
+          <div class="edit-icon">${icon.edit}</div>
+        </div>
+        <div class="card menu-list">
+          <div class="menu-item" onclick="navigate('screen-bill-stats')">
+            <div class="left"><div class="icon">${icon.chart}</div><div class="txt">账单统计</div></div>
+            <div class="arrow">${icon.chevron}</div>
+          </div>
+          <div class="menu-item" onclick="navigate('screen-billing-set')">
+            <div class="left"><div class="icon">${icon.setting}</div><div class="txt">计费设置</div></div>
+            <div class="arrow">${icon.chevron}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderRoomDetail(no) {
+      const r = rooms.find(x => x.no === no) || rooms[0];
+      const wP = roomPrice(r, 'water'), eP = roomPrice(r, 'electric');
+      const gen = isBillGenerated(r);
+      const b = roomBill(r);
+      const paid = r.status === 'paid';
+      const paidFlag = gen && paid ? `<div class="bill-paid-flag">✓ 已缴</div>` : '';
+      const breakdown = gen ? `
+        <div class="bill-breakdown">
+          <div class="bb-row"><span>房租</span><span>${fmt(b.rent)}</span></div>
+          <div class="bb-row"><span>水费（${b.wU} 吨 × ${roomPrice(r,'water')} 元/吨）</span><span>${fmt(b.waterFee)}</span></div>
+          <div class="bb-row"><span>电费（${b.eU} 度 × ${roomPrice(r,'electric')} 元/度）</span><span>${fmt(b.elecFee)}</span></div>
+          <div class="bb-row total"><span>合计</span><span>${fmt(b.total)}</span></div>
+        </div>` : `<div class="hint" id="detail-hint">录入水/电表“当前读数”后，将自动生成当月账单</div>`;
+      const fld = (key, label, val, type, step, isText, fmtFn) => {
+        if (detailEdit) return `<div class="row"><div class="k">${label}</div><input class="field room-input ${isText ? 'flex' : ''}" type="${type}" ${step ? `step="${step}"` : ''} value="${val}" oninput="updateRoomField('${r.no}','${key}',this.value)"></div>`;
+        const shown = fmtFn ? fmtFn(val) : val;
+        return `<div class="row"><div class="k">${label}</div><div class="v">${shown}</div></div>`;
+      };
+      document.getElementById('screen-room-detail').innerHTML = `
+        <div class="topnav"><div class="back" onclick="back()">${icon.back}</div><div class="title">${r.no}</div><div class="action" onclick="toggleDetailEdit('${r.no}')">${detailEdit ? '完成' : '编辑'}</div></div>
+        <div style="padding-top:14px;">
+          <div class="card detail-card">
+            <div class="card-head"><span class="dot"></span>租客信息</div>
+            ${fld('name', '租客姓名', r.tenant, 'text', null, true)}
+            ${fld('phone', '联系电话', r.phone, 'tel', null, true)}
+            ${fld('rent', '月租（元）', r.rent, 'number', null, false, fmt)}
+          </div>
+          <div class="card detail-card">
+            <div class="card-head"><span class="dot"></span>水电气表</div>
+            ${fld('waterBase', '水表表底（吨）', r.waterBase, 'number')}
+            ${fld('water', '水表当前读数', r.water, 'number')}
+            ${fld('wprice', '水费单价（元/吨）', wP, 'number', '0.1')}
+            ${fld('electricBase', '电表表底（度）', r.electricBase, 'number')}
+            ${fld('electric', '电表当前读数', r.electric, 'number')}
+            ${fld('eprice', '电费单价（元/度）', eP, 'number', '0.1')}
+          </div>
+          <div class="card bill-total">
+            <div class="label">本月预估合计（含水电）</div>
+            <div class="value" id="detail-total">${gen ? fmt(b.total) : '待生成'}</div>
+            ${breakdown}
+            ${paidFlag}
+          </div>
+          <button class="btn-primary" style="margin-top:8px;" onclick="currentRoomNo='${r.no}';navigate('screen-month-bill')">查看月度账单</button>
+          ${gen ? `<button class="btn-outline" style="margin-top:10px; ${paid ? 'color:var(--green);border-color:rgba(30,158,90,0.35);' : 'color:var(--accent);'}" onclick="togglePaid('${r.no}')">${paid ? '已缴 · 点击撤销' : '标记已缴'}</button>` : ''}
+          <button class="btn-outline" style="margin-top:10px; color:var(--red); border-color:rgba(214,69,69,0.3);" onclick="confirmDeleteRoom('${r.no}')">删除房间</button>
+        </div>
+      `;
+    }
+    function toggleDetailEdit(no) {
+      detailEdit = !detailEdit;
+      if (!detailEdit) showToast('已保存');
+      renderRoomDetail(no);
+    }
+    function togglePaid(no) {
+      const r = rooms.find(x => x.no === no); if (!r) return;
+      r.status = (r.status === 'paid') ? 'due' : 'paid';
+      archiveMonth(currentMonthKey);
+      showToast(r.status === 'paid' ? '已标记为已缴' : '已撤销已缴');
+      renderRoomDetail(no);
+      renderHome();
+    }
+
+    function renderMonthBill(no) {
+      const r = getRoomAt(currentMonthKey, no) || rooms[0];
+      const b = billForMonth(r, currentMonthKey);
+      const gen = !!b;
+      const meta = monthMeta[currentMonthKey];
+      if (!gen) {
+        document.getElementById('screen-month-bill').innerHTML = `
+          <div class="topnav"><div class="back" onclick="back()">${icon.back}</div><div class="title">${meta.label}账单</div><div class="action"></div></div>
+          <div style="padding-top:14px;">
+            <div class="card bill-total">
+              <div class="label">${r.no} · ${meta.label}账单</div>
+              <div class="value muted">待生成</div>
+              <div class="hint">本月账单尚未生成。请在房间详情中录入水/电表“当前读数”后自动生成。</div>
+            </div>
+            <button class="btn-primary" style="margin-top:16px;" onclick="currentRoomNo='${r.no}';navigate('screen-room-detail')">去录入读数</button>
+          </div>
+        `;
+        return;
+      }
+      document.getElementById('screen-month-bill').innerHTML = `
+        <div class="topnav"><div class="back" onclick="back()">${icon.back}</div><div class="title">${meta.label}账单</div><div class="action"></div></div>
+        <div style="padding-top:14px;">
+          <div class="card bill-total">
+            <div class="label">${r.no} · ${meta.label}合计</div>
+            <div class="value">${fmt(b.total)}</div>
+            ${r.status === 'paid' ? '<div class="bill-paid-flag">✓ 已缴</div>' : ''}
+          </div>
+          <div class="card detail-card">
+            <div class="bill-row">
+              <div><div class="name">房租</div><div class="desc">${r.tenant} · ${r.no}</div></div>
+              <div class="price">${fmt(b.rent)}</div>
+            </div>
+            <div class="bill-row">
+              <div><div class="name">水费</div><div class="desc">${b.wU} 吨 × ${roomPrice(r,'water')} 元/吨</div></div>
+              <div class="price">${fmt(b.waterFee)}</div>
+            </div>
+            <div class="bill-row">
+              <div><div class="name">电费</div><div class="desc">${b.eU} 度 × ${roomPrice(r,'electric')} 元/度</div></div>
+              <div class="price">${fmt(b.elecFee)}</div>
+            </div>
+          </div>
+          <div class="action-row">
+            <button class="btn-outline" onclick="sendBill()">发送给租客</button>
+            <button class="btn-primary" onclick="exportBill('${r.no}', ${b.total}, ${b.rent}, ${b.waterFee}, ${b.elecFee})">保存截图</button>
+          </div>
+        </div>
+      `;
+    }
+    function sendBill() {
+      const monthNum = parseInt(currentMonthKey.split('-')[1], 10);
+      const text = `您好，${monthNum}月账单已出，请查收。`;
+      if (navigator.share) navigator.share({ title: '月度账单', text }).catch(()=>{});
+      else showToast('已复制账单文案');
+    }
+    function exportBill(no, total, rent, water, elec) {
+      const monthNum = parseInt(currentMonthKey.split('-')[1], 10);
+      const canvas = document.createElement('canvas');
+      canvas.width = 750; canvas.height = 1000;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FAF6EF'; ctx.fillRect(0,0,750,1000);
+      ctx.fillStyle = '#0E3A5C'; ctx.font = 'bold 42px "PingFang SC", "Microsoft YaHei", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${no} · ${monthNum}月账单`, 375, 120);
+      ctx.font = '28px sans-serif'; ctx.fillStyle = '#5A6B78';
+      ctx.fillText('收租啦', 375, 170);
+      const rows = [['房租', rent], ['水费', water], ['电费', elec], ['合计', total]];
+      let y = 280;
+      ctx.textAlign = 'left';
+      rows.forEach(([name, val], i) => {
+        ctx.fillStyle = '#0E3A5C'; ctx.font = i===3?'bold 34px sans-serif':'30px sans-serif';
+        ctx.fillText(name, 80, y);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = i===3?'#FF8A3D':'#0E3A5C';
+        ctx.fillText('¥'+val.toLocaleString('zh-CN'), 670, y);
+        ctx.textAlign = 'left';
+        y += 90;
+        if (i < 3) {
+          ctx.strokeStyle = 'rgba(14,58,92,0.08)'; ctx.beginPath(); ctx.moveTo(80,y-50); ctx.lineTo(670,y-50); ctx.stroke();
+        }
+      });
+      ctx.fillStyle = '#0E3A5C'; ctx.font = '22px sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText('长按保存账单截图', 375, 820);
+      ctx.fillStyle = '#FF8A3D'; ctx.font = 'bold 28px sans-serif';
+      ctx.fillText('收租啦 · 房东租房管理', 375, 880);
+      const link = document.createElement('a');
+      link.download = `${no}-${monthNum}月账单.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('账单截图已保存');
+    }
+
+    function renderAddRoom() {
+      document.getElementById('screen-add-room').innerHTML = `
+        <div class="topnav"><div class="back" onclick="back()">${icon.back}</div><div class="title">新增房间</div><div class="action"></div></div>
+        <form onsubmit="submitAddRoom(event)" style="padding-top:14px; display:flex; flex-direction:column; gap:16px;">
+          <div class="form-row"><label>房号</label><input class="field" name="no" placeholder="如 305" required></div>
+          <div class="form-row"><label>租客姓名</label><input class="field" name="tenant" placeholder="租客姓名" required></div>
+          <div class="form-row"><label>租客手机号</label><input class="field" name="phone" placeholder="11位手机号" required></div>
+          <div class="form-row"><label>水表表底</label><input class="field" name="water" type="number" placeholder="水表起始读数" required></div>
+          <div class="form-row"><label>电表表底</label><input class="field" name="electric" type="number" placeholder="电表起始读数" required></div>
+          <div class="form-row"><label>月租金额</label><input class="field" name="rent" type="number" placeholder="月租（元）" required></div>
+          <button type="submit" class="btn-primary" style="margin-top:8px;">保存房间</button>
+        </form>
+      `;
+    }
+    function submitAddRoom(e) {
+      e.preventDefault();
+      const f = e.target;
+      const wb = +f.water.value, eb = +f.electric.value;
+      rooms.push({
+        no: f.no.value, tenant: f.tenant.value, phone: f.phone.value,
+        rent: +f.rent.value,
+        waterBase: wb, water: wb,
+        electricBase: eb, electric: eb,
+        status: 'due', bills: {}
+      });
+      archiveMonth(currentMonthKey);
+      showToast('房间已添加');
+      back();
+      renderHome();
+    }
+
+    function yearTotals(year) {
+      let recv = 0, paid = 0;
+      rooms.forEach(r => {
+        for (let m = 1; m <= 12; m++) {
+          const b = billForMonth(r, year + '-' + m);
+          if (!b) continue;
+          recv += b.total;
+          if (b.status === 'paid') paid += b.total;
+        }
+      });
+      return { recv, paid, due: recv - paid };
+    }
+    function renderBillStats() {
+      const years = yearList();
+      const minY = years[0], maxY = years[years.length - 1];
+      const atFirstY = statsYear <= minY, atLastY = statsYear >= maxY;
+      const dim = a => a ? '' : 'style="opacity:.3;pointer-events:none;"';
+      const t = yearTotals(statsYear);
+      const maxH = 108;
+      const monthBars = [];
+      let maxRecv = 0;
+      for (let m = 1; m <= 12; m++) {
+        let recv = 0;
+        rooms.forEach(r => { const b = billForMonth(r, statsYear + '-' + m); if (b) recv += b.total; });
+        monthBars.push({ m, recv });
+        if (recv > maxRecv) maxRecv = recv;
+      }
+      const bars = monthBars.map(mb => {
+        const h = maxRecv > 0 ? Math.round((mb.recv / maxRecv) * maxH) : 0;
+        return `<div class="bar-group"><div class="bar normal" style="height:${h}px"></div><div class="bar-label">${mb.m}月</div></div>`;
+      }).join('');
+      const trendCard = maxRecv > 0 ? `<div class="trend-chart">${bars}</div>` : `<div class="empty-hint">${statsYear} 年暂无账单数据</div>`;
+      const rows = rooms.map(r => {
+        let recv = 0, paid = 0;
+        for (let m = 1; m <= 12; m++) { const b = billForMonth(r, statsYear + '-' + m); if (!b) continue; recv += b.total; if (b.status === 'paid') paid += b.total; }
+        const allPaid = recv > 0 && paid >= recv;
+        const st = recv === 0 ? 'due' : (allPaid ? 'paid' : 'due');
+        const label = recv === 0 ? '待生成' : (allPaid ? '已缴' : '待缴');
+        return `
+        <div class="stat-row-item">
+          <div class="room">${r.no}</div>
+          <div class="status ${st}">${label}</div>
+          <div class="amount" style="color:${recv ? statusColor(st) : 'var(--muted)'}">${recv ? fmt(recv) : '待生成'}</div>
+        </div>
+      `; }).join('');
+      document.getElementById('screen-bill-stats').innerHTML = `
+        <div class="topnav"><div class="back" onclick="back()">${icon.back}</div><div class="title">账单统计</div><div class="action"></div></div>
+        <div style="padding-top:14px; display:flex; flex-direction:column; gap:14px;">
+          <div class="period-switch" style="justify-content:center; margin-bottom:2px;">
+            <span class="nav-arrow" ${dim(!atFirstY)} onclick="changeStatsYear(-1)">‹</span>
+            <div class="period-year" style="font-size:20px; font-weight:700; color:var(--ink);">${statsYear} 年</div>
+            <span class="nav-arrow" ${dim(!atLastY)} onclick="changeStatsYear(1)">›</span>
+          </div>
+          <div class="card stats-hero">
+            <div class="head"><div class="icon" style="color:var(--accent)">${icon.chart}</div>${statsYear}年收支总览</div>
+            <div class="grid">
+              <div><div class="label">全年应收</div><div class="value">${fmt(t.recv)}</div></div>
+              <div><div class="label">已收</div><div class="value paid">${fmt(t.paid)}</div></div>
+              <div><div class="label">待缴</div><div class="value due">${fmt(t.due)}</div></div>
+            </div>
+          </div>
+          <div class="card stats-hero">
+            <div class="head"><div class="icon" style="color:var(--accent)">${icon.chart}</div>收支趋势（每月应收）</div>
+            ${trendCard}
+          </div>
+          <div class="card detail-card">
+            <div class="head" style="margin-bottom:8px; font-weight:600;">各房间 ${statsYear}年账单</div>
+            ${rows}
+          </div>
+          <button class="btn-primary" onclick="exportYearExcel(${statsYear})">导出 ${statsYear} 年度账单（Excel）</button>
+        </div>
+      `;
+    }
+    function changeStatsYear(delta) {
+      const years = yearList();
+      const minY = years[0], maxY = years[years.length - 1];
+      statsYear = Math.max(minY, Math.min(maxY, statsYear + delta));
+      renderBillStats();
+    }
+
+    /* ===== Pure-JS .xlsx (Excel) generator — no dependencies, works offline ===== */
+    function xmlEscape(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+    }
+    function colLetter(n) {
+      let s = ''; n++;
+      while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+      return s;
+    }
+    function sheetXml(sheet) {
+      let body = '';
+      (sheet.rows || []).forEach((row, ri) => {
+        const r = ri + 1;
+        let cells = '';
+        (row || []).forEach((val, ci) => {
+          const ref = colLetter(ci) + r;
+          if (val === null || val === undefined || val === '') {
+            cells += `<c r="${ref}"/>`;
+          } else if (typeof val === 'number' && isFinite(val)) {
+            cells += `<c r="${ref}"><v>${val}</v></c>`;
+          } else {
+            cells += `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(val)}</t></is></c>`;
+          }
+        });
+        body += `<row r="${r}">${cells}</row>`;
+      });
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+    }
+    function makeZip(files) {
+      const enc = new TextEncoder();
+      const crcTable = (function () {
+        const t = [];
+        for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+        return t;
+      })();
+      function crc(b) { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = (crcTable[(c ^ b[i]) & 0xFF] ^ (c >>> 8)) >>> 0; return (c ^ 0xFFFFFFFF) >>> 0; }
+      const chunks = [], central = [];
+      let offset = 0;
+      files.forEach(f => {
+        const nameBytes = enc.encode(f.name);
+        const data = f.data;
+        const crcVal = crc(data), size = data.length;
+        const lh = new Uint8Array(30 + nameBytes.length);
+        const dv = new DataView(lh.buffer);
+        dv.setUint32(0, 0x04034b50, true);
+        dv.setUint16(4, 20, true); dv.setUint16(6, 0, true); dv.setUint16(8, 0, true);
+        dv.setUint16(10, 0, true); dv.setUint16(12, 0, true);
+        dv.setUint32(14, crcVal, true); dv.setUint32(18, size, true); dv.setUint32(22, size, true);
+        dv.setUint16(26, nameBytes.length, true); dv.setUint16(28, 0, true);
+        lh.set(nameBytes, 30);
+        chunks.push(lh, data);
+        const cd = new Uint8Array(46 + nameBytes.length);
+        const cdv = new DataView(cd.buffer);
+        cdv.setUint32(0, 0x02014b50, true);
+        cdv.setUint16(4, 20, true); cdv.setUint16(6, 20, true); cdv.setUint16(8, 0, true);
+        cdv.setUint16(10, 0, true); cdv.setUint16(12, 0, true); cdv.setUint16(14, 0, true);
+        cdv.setUint32(16, crcVal, true);
+        cdv.setUint32(20, size, true);
+        cdv.setUint32(24, size, true);
+        cdv.setUint16(28, nameBytes.length, true);
+        cdv.setUint16(30, 0, true);
+        cdv.setUint16(32, 0, true);
+        cdv.setUint16(34, 0, true);
+        cdv.setUint16(36, 0, true);
+        cdv.setUint32(38, 0, true);
+        cdv.setUint32(42, offset >>> 0, true);
+        cd.set(nameBytes, 46);
+        central.push(cd);
+        offset += lh.length + data.length;
+      });
+      const centralSize = central.reduce((a, c) => a + c.length, 0);
+      const centralOffset = offset;
+      const end = new Uint8Array(22);
+      const edv = new DataView(end.buffer);
+      edv.setUint32(0, 0x06054b50, true);
+      edv.setUint16(4, 0, true); edv.setUint16(6, 0, true);
+      edv.setUint16(8, files.length, true); edv.setUint16(10, files.length, true);
+      edv.setUint32(12, centralSize, true); edv.setUint32(16, centralOffset, true);
+      edv.setUint16(20, 0, true);
+      const all = chunks.concat(central, [end]);
+      const total = all.reduce((a, c) => a + c.length, 0);
+      const out = new Uint8Array(total);
+      let p = 0; all.forEach(c => { out.set(c, p); p += c.length; });
+      return out;
+    }
+    function buildXlsx(sheets) {
+      const enc = new TextEncoder();
+      const n = sheets.length;
+      const sheetFiles = sheets.map((s, i) => ({ name: (s.name || ('Sheet' + (i + 1))).slice(0, 31), xml: sheetXml(s) }));
+      const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>
+${sheetFiles.map((f, i) => `<sheet name="${xmlEscape(f.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('\n')}
+</sheets></workbook>`;
+      const wbRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${sheetFiles.map((f, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('\n')}
+<Relationship Id="rId${n + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+      const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+      const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+${sheetFiles.map((f, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('\n')}
+</Types>`;
+      const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
+      const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>收租啦年度账单</dc:title><dc:creator>收租啦</dc:creator></cp:coreProperties>`;
+      const app = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>收租啦</Application></Properties>`;
+      const files = [
+        { name: '[Content_Types].xml', data: enc.encode(contentTypes) },
+        { name: '_rels/.rels', data: enc.encode(rootRels) },
+        { name: 'docProps/core.xml', data: enc.encode(core) },
+        { name: 'docProps/app.xml', data: enc.encode(app) },
+        { name: 'xl/workbook.xml', data: enc.encode(workbook) },
+        { name: 'xl/_rels/workbook.xml.rels', data: enc.encode(wbRels) },
+        { name: 'xl/styles.xml', data: enc.encode(styles) },
+        ...sheetFiles.map((f, i) => ({ name: `xl/worksheets/sheet${i + 1}.xml`, data: enc.encode(f.xml) }))
+      ];
+      return makeZip(files);
+    }
+    function exportYearExcel(year) {
+      year = year || (parseInt(String(currentMonthKey).split('-')[0], 10)) || YEAR;
+      const header = ['房间', '租客'];
+      for (let m = 1; m <= 12; m++) header.push(m + '月');
+      header.push('年度合计', '已缴合计');
+      const monthlyColTotals = new Array(12).fill(0);
+      let annualTotalAll = 0, paidTotalAll = 0;
+      const dataRows = rooms.map(r => {
+        const row = [r.no, r.tenant];
+        let annual = 0, paid = 0;
+        for (let m = 1; m <= 12; m++) {
+          const b = billForMonth(r, year + '-' + m);
+          if (b) { row.push(b.total); annual += b.total; monthlyColTotals[m - 1] += b.total; if (b.status === 'paid') paid += b.total; }
+          else row.push('');
+        }
+        row.push(annual, paid);
+        annualTotalAll += annual; paidTotalAll += paid;
+        return row;
+      });
+      const footer = ['全年合计', ''];
+      for (let m = 1; m <= 12; m++) footer.push(monthlyColTotals[m - 1]);
+      footer.push(annualTotalAll, paidTotalAll);
+      const rows = [['收租啦 ' + year + ' 年度账单（单位：元）'], header, ...dataRows, footer];
+      const bytes = buildXlsx([{ name: year + '年度账单', rows }]);
+      const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = '收租啦_' + year + '年度账单.xlsx';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      showToast('年度账单已导出 Excel');
+    }
+
+    /* 租客管理页已移除：流程改为以房间为中心（新增房间时录入租客与表底信息） */
+
+    function renderBillingSet() {
+      const roomRows = rooms.map((r, i) => {
+        const wP = roomPrice(r, 'water'), eP = roomPrice(r, 'electric');
+        return `
+          <div class="row" style="align-items:flex-start; padding:12px 0;">
+            <div class="k" style="font-weight:700; color:var(--ink); min-width:52px;">${r.no}</div>
+            <div style="display:flex; flex-direction:column; gap:10px; flex:1;">
+              <div class="row"><div class="k">月租（元）</div><input class="field room-input" type="number" value="${r.rent}" data-bill="rent" data-i="${i}"></div>
+              <div class="row"><div class="k">水费单价（元/吨）</div><input class="field room-input" type="number" step="0.1" value="${wP}" data-bill="water" data-i="${i}"></div>
+              <div class="row"><div class="k">电费单价（元/度）</div><input class="field room-input" type="number" step="0.1" value="${eP}" data-bill="electric" data-i="${i}"></div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      document.getElementById('screen-billing-set').innerHTML = `
+        <div class="topnav"><div class="back" onclick="back()">${icon.back}</div><div class="title">计费设置</div><div class="action"></div></div>
+        <div style="padding-top:14px; display:flex; flex-direction:column; gap:14px;">
+          <div class="card detail-card">
+            <div style="display:flex; align-items:center; gap:10px; font-weight:600; margin-bottom:12px;"><div style="color:var(--accent)">${icon.setting}</div>全局计费单价</div>
+            <div class="row"><div class="k">水费单价（元/吨）</div><input class="field room-input" type="number" step="0.1" value="${globalPrice.water}" data-global="water"></div>
+            <div class="row"><div class="k">电费单价（元/度）</div><input class="field room-input" type="number" step="0.1" value="${globalPrice.electric}" data-global="electric"></div>
+          </div>
+          <div class="card detail-card">
+            <div style="display:flex; align-items:center; gap:10px; font-weight:600; margin-bottom:12px;"><div style="color:var(--accent)">${icon.chart}</div>房间月租与单价</div>
+            ${roomRows}
+          </div>
+          <button class="btn-primary" onclick="saveBilling()">保存计费设置</button>
+        </div>
+      `;
+    }
+    function saveBilling() {
+      const gw = document.querySelector('[data-global="water"]'); if (gw && gw.value !== '') globalPrice.water = parseFloat(gw.value);
+      const ge = document.querySelector('[data-global="electric"]'); if (ge && ge.value !== '') globalPrice.electric = parseFloat(ge.value);
+      document.querySelectorAll('[data-bill]').forEach(inp => {
+        const i = +inp.dataset.i, field = inp.dataset.bill, v = parseFloat(inp.value);
+        if (isNaN(v)) return;
+        const r = rooms[i];
+        if (field === 'rent') { r.rent = v; }
+        else { r.price = r.price || {}; r.price[field] = v; }
+      });
+      archiveMonth(currentMonthKey);
+      showToast('计费设置已保存');
+    }
+
+    function renderLandlordEdit() {
+      document.getElementById('screen-landlord-edit').innerHTML = `
+        <div class="topnav"><div class="back" onclick="back()">${icon.back}</div><div class="title">编辑个人信息</div><div class="action"></div></div>
+        <form onsubmit="saveLandlordEdit(event)" style="padding-top:14px; display:flex; flex-direction:column; gap:16px;">
+          <div class="form-row"><label>房东姓名</label><input class="field" name="name" value="${landlord.name}" placeholder="房东姓名" required></div>
+          <div class="form-row"><label>联系电话</label><input class="field" name="phone" value="${landlord.phone}" placeholder="联系电话" required></div>
+          <button type="submit" class="btn-primary" style="margin-top:8px;">保存</button>
+        </form>
+      `;
+    }
+    function saveLandlordEdit(e) {
+      e.preventDefault();
+      landlord.name = e.target.name.value;
+      landlord.phone = e.target.phone.value;
+      saveState();
+      showToast('个人信息已保存');
+      back();
+      renderMine();
+    }
+
+    /* ===== Toast ===== */
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 1800);
+    }
+
+    /* ===== In-app confirm modal ===== */
+    let _modalConfirmCb = null;
+    function appConfirm({ title, message, confirmText = '确定', cancelText = '取消', danger = false, onConfirm }) {
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-msg').textContent = message;
+      const cBtn = document.getElementById('modal-confirm');
+      cBtn.textContent = confirmText;
+      cBtn.classList.toggle('danger', !!danger);
+      _modalConfirmCb = onConfirm;
+      document.getElementById('modal').classList.add('show');
+    }
+    function closeModal() {
+      document.getElementById('modal').classList.remove('show');
+      _modalConfirmCb = null;
+    }
+    document.getElementById('modal-cancel').onclick = closeModal;
+    document.getElementById('modal-confirm').onclick = () => { const cb = _modalConfirmCb; closeModal(); if (cb) cb(); };
+
+    function confirmDeleteRoom(no) {
+      appConfirm({
+        title: '删除房间',
+        message: `确定删除 ${no} 房间吗？该房间的账单记录将一并移除，操作不可撤销。`,
+        confirmText: '删除',
+        danger: true,
+        onConfirm: () => {
+          rooms = rooms.filter(x => x.no !== no);
+          saveState();
+          showToast('房间已删除');
+          back();
+          renderHome();
+        }
+      });
+    }
+
+    /* ===== Init ===== */
+    (async function initApp() {
+      await loadState();
+      loadMonth(currentMonthKey);
+      renderHome();
+    })();
+
+    /* ===== Service Worker ===== */
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
