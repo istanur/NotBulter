@@ -10,6 +10,14 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <!-- Capacitor 运行时：必须在本应用内联脚本之前加载，手机端才能拿到 window.Capacitor，
+       从而把 Filesystem / App / Share 等插件调用路由到原生；否则全部静默走桌面回退 -->
+  <script src="capacitor.js"></script>
+  <!-- 各原生插件的浏览器实现：调用 capacitorExports.registerPlugin 把 Filesystem/App/Share 注册进 Capacitor.Plugins，
+       否则 Plugins 只是空对象，原生调用全部 undefined。必须在内联应用脚本之前加载。 -->
+  <script src="cap-filesystem.js"></script>
+  <script src="cap-app.js"></script>
+  <script src="cap-share.js"></script>
   <style>
     :root {
       --bg: #FAF6EF;
@@ -464,7 +472,7 @@
     const LAUNCH_YEAR = 2026, LAUNCH_MONTH = 8;   // 应用正式启用月份：2026 年 8 月
     const LAUNCH_KEY = LAUNCH_YEAR + '-' + LAUNCH_MONTH;
     let rooms = [
-      { no: '101', tenant: '张伟', phone: '138****8021', rent: 2800, waterBase: 1250, water: 1250, electricBase: 3680, electric: 3680, status: 'due', bills: {} }
+      { no: '101', tenant: '张伟', rent: 2800, waterBase: 1250, water: 1250, electricBase: 3680, electric: 3680, status: 'due', bills: {} }
     ];
     const globalPrice = { water: 4.5, electric: 0.8 };
     let landlord = { name: '陈房东', phone: '156****9988' };
@@ -570,6 +578,94 @@
       // 网页预览（非原生）：保持内存中的默认数据
     }
 
+    /* ===== 数据导出 / 导入（换设备迁移） ===== */
+    function backupPayload() {
+      purgeOldBills();
+      return {
+        app: 'shouzula',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        data: { rooms, landlord, globalPrice, currentMonthKey }
+      };
+    }
+    function dateStamp() {
+      const d = new Date();
+      const p = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+    }
+    // 一键导出：原生端弹系统文件保存选择器（SAF），用户选好位置即存盘；网页预览端回退下载
+    async function exportData() {
+      const payload = JSON.stringify(backupPayload(), null, 2);
+      const fname = `shouzula-backup-${dateStamp()}.json`;
+      const Cap = window.Capacitor;
+      const Bridge = Cap && Cap.Plugins && Cap.Plugins.ShouzulaBridge;
+      if (Bridge && isNativeApp()) {
+        try {
+          const res = await Bridge.exportJson({ text: payload, filename: fname });
+          if (res && res.saved) showToast('已导出：请在系统文件选择器中选好保存位置');
+          else if (res && res.saved === false) showToast('已取消导出');
+          return;
+        } catch (e) {
+          console.error('[shouzula] 备份导出失败:', e);
+          showToast('导出失败，请重试');
+          return;
+        }
+      }
+      // 网页预览：浏览器直接下载
+      const blob = new Blob([payload], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.download = fname; link.href = URL.createObjectURL(blob); link.click();
+      showToast('备份文件已生成');
+    }
+    function rerenderAll() {
+      try { renderHome(); } catch (e) {}
+      try { renderMine(); } catch (e) {}
+      try { renderHistory(); } catch (e) {}
+    }
+    // 一键导入：原生端弹系统文件选择器（SAF）读取备份；网页预览端用 <input type=file>
+    function importData() {
+      const Cap = window.Capacitor;
+      const Bridge = Cap && Cap.Plugins && Cap.Plugins.ShouzulaBridge;
+      if (Bridge && isNativeApp()) {
+        Bridge.importJson().then(res => {
+          if (!res || res.cancelled) return;
+          restoreFromText(res.text);
+        }).catch(e => {
+          console.error('[shouzula] 备份导入失败:', e);
+          showToast('导入失败，请重试');
+        });
+        return;
+      }
+      // 网页预览：用文件选择器
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json,.json';
+      input.onchange = () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => restoreFromText(reader.result);
+        reader.onerror = () => showToast('读取文件失败');
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+    // 解析并恢复备份文本（兼容 {rooms,...} 与 {app:'shouzula', data:{...}} 两种格式）
+    function restoreFromText(text) {
+      try {
+        const parsed = JSON.parse(text);
+        const s = (parsed && parsed.app === 'shouzula' && parsed.data) ? parsed.data : parsed;
+        if (!s || !Array.isArray(s.rooms)) { showToast('文件格式不正确，导入失败'); return; }
+        applyState(s);
+        saveState();
+        rerenderAll();
+        showToast('数据导入成功，已全部恢复');
+      } catch (e) {
+        console.error('[shouzula] 导入解析失败:', e);
+        showToast('解析失败，请确认是有效的备份文件');
+      }
+    }
+
     /* ===== Per-month bill archiving & retrieval ===== */
     function archiveMonth(key) {
       rooms.forEach(r => {
@@ -617,7 +713,11 @@
       chevron: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>`,
       edit: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h4L18 10l-4-4L4 16v4z" stroke-linejoin="round"/><path d="M14 6l4 4"/></svg>`,
       search: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4" stroke-linecap="round"/></svg>`,
-      back: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5L8 12l7 7"/></svg>`
+      back: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5L8 12l7 7"/></svg>`,
+      download: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>`,
+      upload: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"/><path d="M7 13l5-5 5 5"/><path d="M5 3h14"/></svg>`,
+      album: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.8"/><path d="M21 15l-5-5L5 21"/></svg>`,
+      layers: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>`
     };
 
     /* ===== Router ===== */
@@ -665,22 +765,54 @@
           document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
           document.querySelector(`.tab[data-tab="${map[prev]}"]`).classList.add('active');
         }
+        document.getElementById('screens').scrollTop = 0;
+        // 重新渲染上一级，保证数据最新（也避免深度页空栈误退桌面）
+        if (prev === 'screen-home') renderHome();
+        else if (prev === 'screen-history') renderHistory();
+        else if (prev === 'screen-mine') renderMine();
+        else if (prev === 'screen-room-detail') { detailEdit = false; renderRoomDetail(currentRoomNo); }
+        else if (prev === 'screen-month-bill') renderMonthBill(currentRoomNo);
+        else if (prev === 'screen-month-list') renderMonthList();
+        else if (prev === 'screen-add-room') renderAddRoom();
+        else if (prev === 'screen-bill-stats') renderBillStats();
+        else if (prev === 'screen-billing-set') renderBillingSet();
+        else if (prev === 'screen-landlord-edit') renderLandlordEdit();
       } else {
-        switchTab('home');
+        exitIfRoot();
+      }
+    }
+    // 当前处于根 tab 时物理返回才退出；非根页但栈异常为空则回首页（防御误退桌面）
+    function exitIfRoot() {
+      const cur = document.querySelector('.screen.active');
+      const curId = cur ? cur.id : null;
+      if (['screen-home','screen-history','screen-mine'].includes(curId)) {
+        try { const Cap = window.Capacitor; if (Cap && Cap.Plugins && Cap.Plugins.App) Cap.Plugins.App.exitApp(); } catch (e) {}
+      } else {
+        navigate('screen-home', { tab: 'home' });
       }
     }
     // 安卓物理返回键：二级页面走应用内“返回上一级”，根页面才退出
-    (function setupHardwareBack() {
+    // Capacitor 插件在脚本加载后才注册，故首注册失败时轮询重试，直到 Cap.Plugins.App 就绪
+    function setupHardwareBack() {
       try {
         const Cap = window.Capacitor;
-        if (Cap && Cap.isNativePlatform && Cap.isNativePlatform() && Cap.Plugins && Cap.Plugins.App) {
+        if (Cap && Cap.Plugins && Cap.Plugins.App) {
           Cap.Plugins.App.addListener('backButton', () => {
             if (stack.length > 0) back();
-            else Cap.Plugins.App.exitApp();
+            else exitIfRoot();
           });
+          return true;
         }
-      } catch (e) { /* 非原生环境忽略 */ }
-    })();
+      } catch (e) { /* 忽略 */ }
+      return false;
+    }
+    if (!setupHardwareBack()) {
+      let tries = 0;
+      const retryTimer = setInterval(() => {
+        tries++;
+        if (setupHardwareBack() || tries > 25) clearInterval(retryTimer);
+      }, 200);
+    }
 
     /* ===== Renderers ===== */
     function fmt(n) { return '¥' + n.toLocaleString('zh-CN'); }
@@ -705,7 +837,6 @@
     function updateRoomField(no, field, val) {
       const r = rooms.find(x => x.no === no); if (!r) return;
       if (field === 'name') { r.tenant = val; }
-      else if (field === 'phone') { r.phone = val; }
       else {
         const v = parseFloat(val); if (isNaN(v)) return;
         if (field === 'rent') r.rent = v;
@@ -896,6 +1027,7 @@
             <div><div class="label">已收</div><div class="value paid">${fmt(paid)}</div></div>
             <div><div class="label">待缴</div><div class="value due">${fmt(due)}</div></div>
           </div>
+          <button class="btn-primary" style="width:100%; margin-bottom:14px; gap:8px;" onclick="exportMonthBills('${currentMonthKey}')">${icon.layers}<span>一键保存本月所有房间账单</span></button>
           <div class="section-title">各房间账单</div>
           ${list}
         </div>
@@ -920,6 +1052,18 @@
             <div class="arrow">${icon.chevron}</div>
           </div>
         </div>
+        <div class="section-title" style="margin-top:18px;">数据备份与迁移</div>
+        <div class="card menu-list">
+          <div class="menu-item" onclick="exportData()">
+            <div class="left"><div class="icon" style="color:#0E3A5C;">${icon.download}</div><div class="txt">导出数据</div></div>
+            <div class="arrow">${icon.chevron}</div>
+          </div>
+          <div class="menu-item" onclick="importData()">
+            <div class="left"><div class="icon" style="color:#FF8A3D;">${icon.upload}</div><div class="txt">导入数据</div></div>
+            <div class="arrow">${icon.chevron}</div>
+          </div>
+        </div>
+        <div class="hint" style="padding:10px 4px; color:#8a99a6; line-height:1.5;">导出会把全部房间、租客、账单与计费设置存成一个文件，可通过微信 / 蓝牙 / 云盘发到新设备后导入恢复。建议重要变更后定期导出备份。</div>
       `;
     }
 
@@ -948,7 +1092,6 @@
           <div class="card detail-card">
             <div class="card-head"><span class="dot"></span>租客信息</div>
             ${fld('name', '租客姓名', r.tenant, 'text', null, true)}
-            ${fld('phone', '联系电话', r.phone, 'tel', null, true)}
             ${fld('rent', '月租（元）', r.rent, 'number', null, false, fmt)}
           </div>
           <div class="card detail-card">
@@ -1013,7 +1156,18 @@
             <div class="value">${fmt(b.total)}</div>
             ${r.status === 'paid' ? '<div class="bill-paid-flag">✓ 已缴</div>' : ''}
           </div>
-          <div class="card detail-card">
+          <div class="card detail-card" style="margin-top:12px;">
+            <div class="section-title" style="margin-bottom:10px;">表计读数</div>
+            <div class="bill-row">
+              <div><div class="name">水表</div><div class="desc">表底 ${r.waterBase} → 现表 ${r.water}（${b.wU} 吨）</div></div>
+              <div class="price">${fmt(b.waterFee)}</div>
+            </div>
+            <div class="bill-row">
+              <div><div class="name">电表</div><div class="desc">表底 ${r.electricBase} → 现表 ${r.electric}（${b.eU} 度）</div></div>
+              <div class="price">${fmt(b.elecFee)}</div>
+            </div>
+          </div>
+          <div class="card detail-card" style="margin-top:12px;">
             <div class="bill-row">
               <div><div class="name">房租</div><div class="desc">${r.tenant} · ${r.no}</div></div>
               <div class="price">${fmt(b.rent)}</div>
@@ -1028,20 +1182,36 @@
             </div>
           </div>
           <div class="action-row">
-            <button class="btn-outline" onclick="sendBill()">发送给租客</button>
-            <button class="btn-primary" onclick="exportBill('${r.no}', ${b.total}, ${b.rent}, ${b.waterFee}, ${b.elecFee})">保存截图</button>
+            <button class="btn-primary" style="width:100%; gap:8px; grid-column: 1 / -1;" onclick="exportBill('${r.no}', ${b.total}, ${b.rent}, ${b.waterFee}, ${b.elecFee}, ${r.waterBase}, ${r.water}, ${r.electricBase}, ${r.electric})">${icon.album}<span>保存截图到相册</span></button>
           </div>
         </div>
       `;
     }
-    function sendBill() {
-      const monthNum = parseInt(currentMonthKey.split('-')[1], 10);
-      const text = `您好，${monthNum}月账单已出，请查收。`;
-      if (navigator.share) navigator.share({ title: '月度账单', text }).catch(()=>{});
-      else showToast('已复制账单文案');
+    // 保存账单图片到系统相册：原生端用 MediaStore 直写 Pictures/收租啦（无需相册权限、不依赖系统分享面板）；
+    // 网页预览端回退浏览器下载
+    async function saveImageFile(canvas, fileName, shareText) {
+      const dataUrl = canvas.toDataURL('image/png');
+      const base64 = dataUrl.split(',')[1];
+      const Cap = window.Capacitor;
+      const Bridge = Cap && Cap.Plugins && Cap.Plugins.ShouzulaBridge;
+      // 原生端：直接由 MediaStore 写入系统相册（Pictures/收租啦），OPPO 相册里即可看到，无需任何权限弹窗
+      if (Bridge && isNativeApp()) {
+        try {
+          const res = await Bridge.saveImageToGallery({ base64, filename: fileName });
+          if (res && res.saved) { showToast('已保存到相册：Pictures/收租啦/' + fileName); return; }
+          showToast('保存到相册失败，请重试'); return;
+        } catch (e) {
+          console.error('[shouzula] 存相册失败:', e);
+          showToast('保存到相册失败，请重试'); return;
+        }
+      }
+      // 网页预览：浏览器直接下载
+      const link = document.createElement('a');
+      link.download = fileName; link.href = dataUrl; link.click();
+      showToast('账单图片已生成');
     }
-    function exportBill(no, total, rent, water, elec) {
-      const monthNum = parseInt(currentMonthKey.split('-')[1], 10);
+    // 构建单个房间的详细账单截图（750x1000，含表计读数），返回 canvas
+    function buildRoomBillCanvas(no, total, rent, waterFee, elecFee, waterBase, waterNow, electricBase, electricNow, monthNum) {
       const canvas = document.createElement('canvas');
       canvas.width = 750; canvas.height = 1000;
       const ctx = canvas.getContext('2d');
@@ -1051,7 +1221,7 @@
       ctx.fillText(`${no} · ${monthNum}月账单`, 375, 120);
       ctx.font = '28px sans-serif'; ctx.fillStyle = '#5A6B78';
       ctx.fillText('收租啦', 375, 170);
-      const rows = [['房租', rent], ['水费', water], ['电费', elec], ['合计', total]];
+      const rows = [['房租', rent], ['水费', waterFee], ['电费', elecFee], ['合计', total]];
       let y = 280;
       ctx.textAlign = 'left';
       rows.forEach(([name, val], i) => {
@@ -1066,15 +1236,49 @@
           ctx.strokeStyle = 'rgba(14,58,92,0.08)'; ctx.beginPath(); ctx.moveTo(80,y-50); ctx.lineTo(670,y-50); ctx.stroke();
         }
       });
-      ctx.fillStyle = '#0E3A5C'; ctx.font = '22px sans-serif';
-      ctx.textAlign = 'center'; ctx.fillText('长按保存账单截图', 375, 820);
+      // 表计读数（保留水/电表表底与现表，便于租客核对）
+      const wU = Math.max(0, waterNow - waterBase);
+      const eU = Math.max(0, electricNow - electricBase);
+      ctx.textAlign = 'center'; ctx.fillStyle = '#5A6B78'; ctx.font = '24px sans-serif';
+      ctx.fillText('— 表计读数 —', 375, 700);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#0E3A5C'; ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('水表', 80, 750);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#5A6B78'; ctx.font = '24px sans-serif';
+      ctx.fillText(`表底 ${waterBase} → 现表 ${waterNow}（${wU} 吨）`, 670, 750);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#0E3A5C'; ctx.font = 'bold 26px sans-serif';
+      ctx.fillText('电表', 80, 805);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#5A6B78'; ctx.font = '24px sans-serif';
+      ctx.fillText(`表底 ${electricBase} → 现表 ${electricNow}（${eU} 度）`, 670, 805);
       ctx.fillStyle = '#FF8A3D'; ctx.font = 'bold 28px sans-serif';
-      ctx.fillText('收租啦 · 房东租房管理', 375, 880);
-      const link = document.createElement('a');
-      link.download = `${no}-${monthNum}月账单.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      showToast('账单截图已保存');
+      ctx.textAlign = 'center'; ctx.fillText('收租啦 · 房东租房管理', 375, 880);
+      return canvas;
+    }
+    // 单房间账单截图 → 保存到相册
+    function exportBill(no, total, rent, water, elec, waterBase, waterNow, electricBase, electricNow) {
+      const monthNum = parseInt(currentMonthKey.split('-')[1], 10);
+      const canvas = buildRoomBillCanvas(no, total, rent, water, elec, waterBase, waterNow, electricBase, electricNow, monthNum);
+      canvas.toBlob(() => {
+        saveImageFile(canvas, `${no}-${monthNum}月账单.png`, `${no} ${monthNum}月账单`);
+      }, 'image/png');
+    }
+    // 一键保存本月所有房间账单：逐房间各生成一张详细截图，分别存相册（不再合成一张汇总图）
+    async function exportMonthBills(key) {
+      const arr = getMonthRooms(key).filter(r => billForMonth(r, key));
+      if (!arr.length) { showToast('本月暂无已生成的账单'); return; }
+      const monthNum = parseInt(key.split('-')[1], 10);
+      let saved = 0;
+      for (const r of arr) {
+        const b = billForMonth(r, key);
+        const canvas = buildRoomBillCanvas(r.no, b.total, b.rent, b.waterFee, b.elecFee, r.waterBase, r.water, r.electricBase, r.electric, monthNum);
+        await new Promise((resolve) => {
+          canvas.toBlob(async () => {
+            await saveImageFile(canvas, `${r.no}-${monthNum}月账单.png`, `${r.no} ${monthNum}月账单`);
+            resolve();
+          }, 'image/png');
+        });
+        saved++;
+      }
+      showToast(`已保存 ${saved} 个房间的账单截图到相册`);
     }
 
     function renderAddRoom() {
@@ -1083,7 +1287,6 @@
         <form onsubmit="submitAddRoom(event)" style="padding-top:14px; display:flex; flex-direction:column; gap:16px;">
           <div class="form-row"><label>房号</label><input class="field" name="no" placeholder="如 305" required></div>
           <div class="form-row"><label>租客姓名</label><input class="field" name="tenant" placeholder="租客姓名" required></div>
-          <div class="form-row"><label>租客手机号</label><input class="field" name="phone" placeholder="11位手机号" required></div>
           <div class="form-row"><label>水表表底</label><input class="field" name="water" type="number" placeholder="水表起始读数" required></div>
           <div class="form-row"><label>电表表底</label><input class="field" name="electric" type="number" placeholder="电表起始读数" required></div>
           <div class="form-row"><label>月租金额</label><input class="field" name="rent" type="number" placeholder="月租（元）" required></div>
@@ -1096,7 +1299,7 @@
       const f = e.target;
       const wb = +f.water.value, eb = +f.electric.value;
       rooms.push({
-        no: f.no.value, tenant: f.tenant.value, phone: f.phone.value,
+        no: f.no.value, tenant: f.tenant.value,
         rent: +f.rent.value,
         waterBase: wb, water: wb,
         electricBase: eb, electric: eb,
@@ -1461,8 +1664,12 @@ ${sheetFiles.map((f, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml
     })();
 
     /* ===== Service Worker ===== */
+    // 原生壳内不需要 PWA 离线缓存：Service Worker 会缓存旧版 index.html，
+    // 导致 APK 更新后仍在跑老页面、原生插件加载不上。启动时注销所有已注册的 SW。
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(r => r.unregister());
+      }).catch(() => {});
     }
   </script>
 </body>
