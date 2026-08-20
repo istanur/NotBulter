@@ -412,6 +412,24 @@
     .modal .m-cancel { background: rgba(14, 58, 92, 0.06); color: var(--ink); }
     .modal .m-confirm { background: var(--accent); color: #fff; }
     .modal .m-confirm.danger { background: var(--red); }
+
+    /* ===== Batch fill readings modal ===== */
+    .batch-modal { width: 92%; max-width: 460px; max-height: 82vh; display: flex; flex-direction: column; padding: 20px 18px 14px; }
+    .bt-title { font-size: 17px; font-weight: 700; color: var(--ink); margin-bottom: 6px; }
+    .bt-sub { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 14px; }
+    .bt-list { overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; gap: 12px; padding-right: 2px; margin-bottom: 14px; }
+    .bt-row { background: rgba(14,58,92,0.04); border-radius: 14px; padding: 12px; }
+    .bt-row .bn { font-weight: 700; color: var(--ink); font-size: 15px; margin-bottom: 10px; }
+    .bt-row .bn small { font-weight: 600; color: var(--muted); margin-left: 6px; font-size: 12px; }
+    .bt-inputs { display: flex; gap: 10px; }
+    .bt-inputs .col { flex: 1; min-width: 0; }
+    .bt-inputs label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 5px; }
+    .bt-inputs input { width: 100%; text-align: left; }
+    .bt-empty { font-size: 14px; color: var(--muted); text-align: center; padding: 24px 0; }
+    .bt-actions { display: flex; gap: 12px; }
+    .bt-actions button { flex: 1; height: 44px; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; border: none; }
+    .bt-cancel { background: rgba(14, 58, 92, 0.06); color: var(--ink); }
+    .bt-confirm { background: var(--accent); color: #fff; }
   </style>
 </head>
 <body>
@@ -458,6 +476,18 @@
       <div class="m-actions">
         <button class="m-cancel" id="modal-cancel">取消</button>
         <button class="m-confirm" id="modal-confirm">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="batch-modal" class="modal-overlay">
+    <div class="modal batch-modal">
+      <div class="bt-title" id="bt-title"></div>
+      <div class="bt-sub" id="bt-sub"></div>
+      <div class="bt-list" id="bt-list"></div>
+      <div class="bt-actions">
+        <button class="bt-cancel" onclick="closeBatchFill()">取消</button>
+        <button class="bt-confirm" onclick="saveBatchFill()">保存并生成账单</button>
       </div>
     </div>
   </div>
@@ -893,6 +923,7 @@
         recv += b.total; if (r.status === 'paid') paid += b.total;
       });
       const due = recv - paid;
+      const pendingCount = getMonthRooms(currentMonthKey).filter(r => !isBillGenerated(r)).length;
       const hint = genCount === 0
         ? `<div class="empty-hint">本月账单待生成，录入水/电表“当前读数”后将自动生成</div>`
         : '';
@@ -916,6 +947,7 @@
           <div><div class="label">已收</div><div class="value paid">${fmt(paid)}</div></div>
           <div><div class="label">待缴</div><div class="value due">${fmt(due)}</div></div>
         </div>
+        <button class="btn-outline" style="margin-bottom:14px; gap:8px;" onclick="openBatchFill()">${icon.edit}<span>批量录入水/电表读数（${pendingCount} 间待填）</span></button>
         ${hint}
         <div style="display:flex; justify-content:space-between; align-items:center; margin:24px 0 12px;">
           <div class="section-title" style="margin:0;">房间账单</div>
@@ -1028,6 +1060,7 @@
             <div><div class="label">待缴</div><div class="value due">${fmt(due)}</div></div>
           </div>
           <button class="btn-primary" style="width:100%; margin-bottom:14px; gap:8px;" onclick="exportMonthBills('${currentMonthKey}')">${icon.layers}<span>一键保存本月所有房间账单</span></button>
+          <button class="btn-outline" style="margin-bottom:14px; gap:8px;" onclick="openBatchFill()">${icon.edit}<span>批量录入水/电表读数</span></button>
           <div class="section-title">各房间账单</div>
           ${list}
         </div>
@@ -1569,8 +1602,8 @@ ${sheetFiles.map((f, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml
         <div style="padding-top:14px; display:flex; flex-direction:column; gap:14px;">
           <div class="card detail-card">
             <div style="display:flex; align-items:center; gap:10px; font-weight:600; margin-bottom:12px;"><div style="color:var(--accent)">${icon.setting}</div>全局计费单价</div>
-            <div class="row"><div class="k">水费单价（元/吨）</div><input class="field room-input" type="number" step="0.1" value="${globalPrice.water}" data-global="water"></div>
-            <div class="row"><div class="k">电费单价（元/度）</div><input class="field room-input" type="number" step="0.1" value="${globalPrice.electric}" data-global="electric"></div>
+            <div class="row"><div class="k">水费单价（元/吨）</div><input class="field room-input" type="number" step="0.1" value="${globalPrice.water}" data-global="water" onchange="applyGlobalPrice('water', this.value)"></div>
+            <div class="row"><div class="k">电费单价（元/度）</div><input class="field room-input" type="number" step="0.1" value="${globalPrice.electric}" data-global="electric" onchange="applyGlobalPrice('electric', this.value)"></div>
           </div>
           <div class="card detail-card">
             <div style="display:flex; align-items:center; gap:10px; font-weight:600; margin-bottom:12px;"><div style="color:var(--accent)">${icon.chart}</div>房间月租与单价</div>
@@ -1588,7 +1621,11 @@ ${sheetFiles.map((f, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml
         if (isNaN(v)) return;
         const r = rooms[i];
         if (field === 'rent') { r.rent = v; }
-        else { r.price = r.price || {}; r.price[field] = v; }
+        else {
+          r.price = r.price || {};
+          if (v === globalPrice[field]) { delete r.price[field]; if (!Object.keys(r.price).length) delete r.price; }
+          else { r.price[field] = v; }
+        }
       });
       archiveMonth(currentMonthKey);
       showToast('计费设置已保存');
@@ -1639,6 +1676,61 @@ ${sheetFiles.map((f, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml
     }
     document.getElementById('modal-cancel').onclick = closeModal;
     document.getElementById('modal-confirm').onclick = () => { const cb = _modalConfirmCb; closeModal(); if (cb) cb(); };
+
+    /* ===== 批量录入本月水/电表读数 ===== */
+    function openBatchFill() {
+      const pending = rooms.filter(r => !isBillGenerated(r));
+      if (!pending.length) { showToast('本月读数已全部录入，无待填房间'); return; }
+      document.getElementById('bt-title').textContent = '批量录入本月水/电表读数';
+      document.getElementById('bt-sub').textContent = `以下 ${pending.length} 个房间尚未录入当月读数，填写“当前读数”后将自动生成账单（默认已填表底值，替换为实际读数即可）`;
+      const list = document.getElementById('bt-list');
+      list.innerHTML = pending.map(r => `
+        <div class="bt-row">
+          <div class="bn">${r.no}<small>${r.tenant}</small></div>
+          <div class="bt-inputs">
+            <div class="col"><label>水表当前读数</label><input class="field" type="number" inputmode="decimal" data-bn="${r.no}" data-type="water" value="${r.water}"></div>
+            <div class="col"><label>电表当前读数</label><input class="field" type="number" inputmode="decimal" data-bn="${r.no}" data-type="electric" value="${r.electric}"></div>
+          </div>
+        </div>
+      `).join('');
+      document.getElementById('batch-modal').classList.add('show');
+    }
+    function closeBatchFill() { document.getElementById('batch-modal').classList.remove('show'); }
+    function saveBatchFill() {
+      const inputs = document.querySelectorAll('#bt-list input');
+      let filled = 0;
+      inputs.forEach(inp => {
+        const no = inp.dataset.bn, type = inp.dataset.type;
+        const v = parseFloat(inp.value);
+        if (isNaN(v)) return;
+        const r = rooms.find(x => x.no === no); if (!r) return;
+        if (type === 'water') r.water = v; else r.electric = v;
+        filled++;
+      });
+      if (filled === 0) { showToast('未填写任何读数'); return; }
+      closeBatchFill();
+      archiveMonth(currentMonthKey);
+      saveState();
+      showToast('已保存 ' + filled + ' 条读数，账单自动生成');
+      renderHome();
+      renderMonthList();
+    }
+
+    /* 全局单价修改后映射到所有房间：清除各房间该类型的单价覆盖，全部改用新全局单价 */
+    function applyGlobalPrice(type, val) {
+      const v = parseFloat(val);
+      if (isNaN(v)) return;
+      globalPrice[type] = v;
+      let covered = 0;
+      rooms.forEach(r => {
+        if (r.price && r.price[type] != null) { delete r.price[type]; if (!Object.keys(r.price).length) delete r.price; covered++; }
+      });
+      archiveMonth(currentMonthKey);
+      saveState();
+      showToast('新单价已应用到全部 ' + rooms.length + ' 个房间' + (covered ? '（覆盖 ' + covered + ' 个单独设置）' : ''));
+      if (document.getElementById('screen-billing-set').innerHTML) renderBillingSet();
+      renderHome();
+    }
 
     function confirmDeleteRoom(no) {
       appConfirm({
